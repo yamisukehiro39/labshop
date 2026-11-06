@@ -1,0 +1,35 @@
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /run/nginx.pid;
+events { worker_connections 1024; }
+http {
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
+  # Do not record query strings, passwords or session cookies in access logs.
+  log_format labshop '$remote_addr $request_method $uri $status $request_time';
+  access_log /var/log/nginx/access.log labshop;
+  server_tokens off;
+  upstream api { __UPSTREAMS__ }
+  server {
+    listen 80 default_server;
+    server_name _;
+    root /usr/share/nginx/labshop;
+    index index.html;
+    client_max_body_size 16k;
+    add_header Content-Security-Policy "__CSP__" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Cache-Control no-store always;
+    location / { try_files $uri $uri/ =404; }
+    # Strip /api/: /api/products -> /products, preserving existing Terraform health path.
+    location /api/ {
+      proxy_pass http://api/;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_connect_timeout 3s;
+      proxy_read_timeout 30s;
+      proxy_next_upstream error timeout http_502 http_503 http_504;
+    }
+  }
+}

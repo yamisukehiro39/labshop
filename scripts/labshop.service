@@ -1,0 +1,23 @@
+[Unit]
+Description=LabShop API
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=labshop
+Group=labshop
+WorkingDirectory=/opt/labshop/current
+EnvironmentFile=/etc/labshop/service.env
+Environment=DB_CONFIG=/etc/labshop/db.json
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/labshop/current/.venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 2 --threads 2 --timeout 30 backend.app:app
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# The API does not need EC2 instance credentials. SSM bootstrap runs outside this unit.
+IPAddressDeny=169.254.169.254
+IPAddressDeny=fd00:ec2::254
+[Install]
+WantedBy=multi-user.target

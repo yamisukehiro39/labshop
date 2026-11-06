@@ -1,0 +1,4 @@
+labshop_repository = "https://github.com/TON_COMPTE/labshop.git"
+# Replace with git rev-parse HEAD after your first push.
+labshop_commit = "REPLACE_WITH_FULL_40_CHARACTER_COMMIT_SHA"
+labshop_mode = "vulnerable"

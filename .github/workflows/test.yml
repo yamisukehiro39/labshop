@@ -1,0 +1,29 @@
+name: Test LabShop
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: labadmin
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: awslab
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U labadmin -d awslab" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://labadmin:ci-only@localhost:5432/awslab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest -q
+      - run: bash -n scripts/install.sh
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=infra/module init -backend=false
+      - run: terraform -chdir=infra/module validate

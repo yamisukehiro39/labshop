@@ -1,0 +1,20 @@
+#!/bin/bash
+set -euo pipefail
+umask 027
+dnf install -y git python3 curl
+install -d -m 755 /opt/labshop/releases /etc/labshop
+# Serialization includes Git to prevent concurrent associations corrupting checkout.
+exec 8>/var/lock/labshop-checkout.lock
+flock -w 900 8
+printf '%s' '${config_b64}' | base64 -d > /etc/labshop/config.json
+chmod 600 /etc/labshop/config.json
+release='/opt/labshop/releases/${commit}'
+if [ ! -d "$release/.git" ]; then
+  mkdir -p "$release"
+  git -C "$release" init --quiet
+  git -C "$release" remote add origin '${repository_url}'
+fi
+git -C "$release" fetch --quiet --depth 1 origin '${commit}'
+git -C "$release" checkout --quiet --detach FETCH_HEAD
+test "$(git -C "$release" rev-parse HEAD)" = '${commit}'
+bash "$release/scripts/install.sh" '${role}'

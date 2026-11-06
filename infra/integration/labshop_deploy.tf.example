@@ -1,0 +1,50 @@
+# Copy as labshop_deploy.tf at the root of YOUR EXISTING Terraform project.
+# Copy infra/module/ to Terraform/modules/labshop_deploy/ first.
+# Remove old aws_ssm_association.labshop and aws_ssm_association.web_nginx blocks.
+# Keep all EC2, network and ALB resources. Do not run old and new installers together.
+variable "labshop_repository" { type = string }
+variable "labshop_commit" { type = string }
+variable "labshop_mode" {
+  type = string
+  default = "secure"
+}
+# Dedicated application profile: web continues to use test_ec2 (SSM only).
+resource "aws_iam_role" "labshop_application" {
+  name_prefix = "labshop-app-"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{Effect = "Allow", Principal = {Service = "ec2.amazonaws.com"}, Action = "sts:AssumeRole"}]
+  })
+}
+resource "aws_iam_role_policy_attachment" "labshop_ssm" {
+  role = aws_iam_role.labshop_application.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+resource "aws_iam_instance_profile" "labshop_application" {
+  name_prefix = "labshop-app-"
+  role = aws_iam_role.labshop_application.name
+}
+# REQUIRED EDIT inside existing aws_instance.application (and application_b if present):
+# iam_instance_profile = aws_iam_instance_profile.labshop_application.name
+module "labshop_deploy" {
+  source = "./modules/labshop_deploy"
+  repository_url = var.labshop_repository
+  commit = var.labshop_commit
+  mode = var.labshop_mode
+  # Existing alb.tf uses HTTP. Switch to true after configuring HTTPS on the ALB.
+  cookie_secure = false
+  application_role_name = aws_iam_role.labshop_application.name
+  application_instances = {
+    a = { id = aws_instance.application.id, private_ip = aws_instance.application.private_ip }
+    # b = { id = aws_instance.application_b.id, private_ip = aws_instance.application_b.private_ip }
+  }
+  web_instance_ids = {
+    a = aws_instance.web.id
+    # b = aws_instance.web_b.id
+  }
+  db_host = aws_db_instance.database.address
+  db_name = aws_db_instance.database.db_name
+  master_secret_arn = aws_db_instance.database.master_user_secret[0].secret_arn
+  region = "eu-west-3"
+  depends_on = [aws_iam_role_policy_attachment.labshop_ssm]
+}
